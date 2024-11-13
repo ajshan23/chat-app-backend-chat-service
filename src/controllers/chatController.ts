@@ -16,72 +16,88 @@ export const sendMessage = async (req: Request<{}, {}, SendMessageRequestBody>, 
     const { messageContent, conversationId, receiverId, type } = req.body;
     const senderId = req.user?.userId;
 
-    try {
-        let conversation;
+    if (!messageContent) {
+        res.status(400).json({ message: 'Message content cannot be empty' });
+        return;
+    }
+    if (type === 'normal' && !receiverId) {
+        res.status(400).json({ message: 'ReceiverId is required for normal chat messages' });
+        return;
+    }
 
-        // Step 1: Check if the conversation exists
-        if (conversationId) {
+    try {
+        let conversation: any;
+
+        if (!conversationId && type === 'normal' && receiverId) {
+            conversation = await Conversation.findOne({
+                type: 'normal',
+                participants: { $all: [new Types.ObjectId(senderId), new Types.ObjectId(receiverId)] },
+            });
+
+            if (!conversation) {
+                conversation = new Conversation({
+                    type: 'normal',
+                    participants: [new Types.ObjectId(senderId), new Types.ObjectId(receiverId)],
+                    lastMessage: messageContent,
+                    updatedAt: new Date(),
+                });
+                await conversation.save();
+            }
+        } else if (conversationId) {
             conversation = await Conversation.findById(conversationId);
             if (!conversation) {
                 res.status(404).json({ message: 'Conversation not found' });
                 return;
             }
-        } else {
-            // Step 2: If no conversationId, find or create a new conversation
-            if (type === 'normal' && receiverId) {
-                conversation = await Conversation.findOne({
-                    type: 'normal',
-                    participants: { $all: [new Types.ObjectId(senderId), new Types.ObjectId(receiverId)] },
-                });
-
-                if (!conversation) {
-                    // Create a new normal conversation
-                    conversation = new Conversation({
-                        type: 'normal',
-                        participants: [new Types.ObjectId(senderId), new Types.ObjectId(receiverId)],
-                    });
-                    await conversation.save();
-                }
-            } else if (type === 'group') {
-                res.status(400).json({ message: 'ConversationId is required for group messages' });
-                return;
-            }
-        }
-
-        // Step 3: Ensure the sender is part of the conversation
-        if (!conversation?.participants.includes(new Types.ObjectId(senderId))) {
-            res.status(403).json({ message: 'Sender is not part of this conversation' });
+        } else if (type === 'group') {
+            res.status(400).json({ message: 'ConversationId is required for group messages' });
             return;
         }
 
-        // Step 4: Create a new message
+        if (!conversation) {
+            res.status(400).json({ message: 'Failed to find or create conversation' });
+            return
+        }
+
+        if (!conversation.participants.includes(new Types.ObjectId(senderId))) {
+            res.status(403).json({ message: 'Sender is not part of this conversation' });
+            return
+        }
+
         const newMessage = new Message({
-            conversationId: conversation?._id,
+            conversationId: conversation._id,
             senderId: new Types.ObjectId(senderId),
             content: messageContent,
             timestamp: new Date(),
-            conversationType: conversation?.type,
+            conversationType: conversation.type,
             isRead: false,
-            type: 'text', // Default message type
+            type: 'text',
         });
-
-        // Step 5: Save the message
         await newMessage.save();
 
-        // Step 6: Update the conversation with the latest message
         conversation.lastMessage = newMessage.content;
+        conversation.updatedAt = new Date();
         await conversation.save();
-        console.log("receiverId,", receiverId);
 
-        const recieverSocketId = await getRecieverSocketId(receiverId as string)
-        console.log("recieverSocketId", recieverSocketId);
+        const participantIds = conversation.participants.filter(
+            (participant: Types.ObjectId) => participant.toString() !== senderId?.toString()
+        );
 
-        if (recieverSocketId) {
-
-            io.to(recieverSocketId).emit("newMessage", { conversationId, message: newMessage, participantId: senderId, participantName: req.user?.username, participantImage: req.user?.profilePicture })
+        for (const participantId of participantIds) {
+            const receiverSocketId = await getRecieverSocketId(participantId.toString());
+            if (receiverSocketId) {
+                process.nextTick(() => {
+                    io.to(receiverSocketId).emit("newMessage", {
+                        conversationId: conversation._id,
+                        message: newMessage,
+                        participantId: senderId,
+                        participantName: req.user?.username,
+                        participantImage: req.user?.profilePicture,
+                    });
+                });
+            }
         }
 
-        // Step 7: Return the updated conversation and message to the client
         res.status(200).json({
             conversationId: conversation._id,
             message: newMessage,
@@ -93,6 +109,7 @@ export const sendMessage = async (req: Request<{}, {}, SendMessageRequestBody>, 
         res.status(500).json({ message: 'Failed to send message', error: error.message });
     }
 };
+
 
 
 
