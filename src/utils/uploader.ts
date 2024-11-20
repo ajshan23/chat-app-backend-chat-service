@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
 
 const s3 = new S3Client({
-    region: process.env.AWS_BUCKET_REGION,
+    region: process.env.AWS_BUCKET_REGION!,
     credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
@@ -38,7 +38,7 @@ async function uploadFileToS3(file: Express.Multer.File): Promise<any> {
     });
 
     await upload.done();
-    const fileUrl = `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_BUCKET_REGION}.amazonaws.com/${uniqueFileName}`;
+    const fileUrl = `https://${process.env.AWS_BUCKET_NAME!}.s3.ap-south-1.amazonaws.com/${uniqueFileName}`;
     return {
         url: fileUrl,
         key: uniqueFileName,
