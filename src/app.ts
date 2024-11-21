@@ -5,7 +5,8 @@ import profileRouter from "./routes/profileROutes"
 import chatRouter from "./routes/chatRoutes"
 import cors from "cors";
 import { app, server } from "./config/socket";
-
+import dotenv from "dotenv"
+dotenv.config({})
 // const app = express();
 // app.use(cors({
 //     origin: "*",

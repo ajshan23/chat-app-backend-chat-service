@@ -70,9 +70,13 @@ io.on('connection', async (socket) => {
     socket.on("messageSeen", async ({ messageId, conversationId, senderId }, callback) => {
         // Process the messageId (e.g., mark message as seen in the database)
         console.log("seeneeee");
+        console.log("messageId", messageId);
+
         const updateMessage = await Message.findByIdAndUpdate(messageId, {
             isRead: true
         }, { new: true })
+        console.log("updated message", updateMessage);
+
 
         if (updateMessage) {
             const recipientSocketId: any = await redis.hget('userSocketMap', senderId);

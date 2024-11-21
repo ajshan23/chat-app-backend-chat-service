@@ -89,7 +89,11 @@ export const sendMessage = async (req: Request<{}, {}, SendMessageRequestBody>, 
                 process.nextTick(() => {
                     io.to(receiverSocketId).emit("newMessage", {
                         conversationId: conversation._id,
-                        message: newMessage,
+                        message: {
+                            ...newMessage.toObject(),
+                            messageId: newMessage._id, // Add the renamed property
+                            _id: undefined,           // Optionally remove the original _id
+                        },
                         participantId: senderId,
                         participantName: req.user?.username,
                         participantImage: req.user?.profilePicture,
@@ -100,7 +104,11 @@ export const sendMessage = async (req: Request<{}, {}, SendMessageRequestBody>, 
 
         res.status(200).json({
             conversationId: conversation._id,
-            message: newMessage,
+            message: {
+                ...newMessage.toObject(),
+                messageId: newMessage._id, // Add the renamed property
+                _id: undefined,           // Optionally remove the original _id
+            },
             updatedAt: conversation.updatedAt,
         });
 
